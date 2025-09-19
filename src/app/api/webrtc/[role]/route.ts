@@ -4,7 +4,7 @@ type WebRTCParams = { sdp: string; candidates: string[]; timestamp: number };
 
 const g = globalThis as { webrtcStore?: { offer: WebRTCParams | null; answer: WebRTCParams | null } };
 if (!g.webrtcStore) g.webrtcStore = { offer: null, answer: null };
-let memoryStore = g.webrtcStore as {
+const memoryStore = g.webrtcStore as {
   offer: WebRTCParams | null;
   answer: WebRTCParams | null;
 };
