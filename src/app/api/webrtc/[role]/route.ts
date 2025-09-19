@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 type WebRTCParams = { sdp: string; candidates: string[]; timestamp: number };
 
+// @ts-ignore
 const g = globalThis as any;
 if (!g.webrtcStore) g.webrtcStore = { offer: null, answer: null };
 let memoryStore = g.webrtcStore as {
