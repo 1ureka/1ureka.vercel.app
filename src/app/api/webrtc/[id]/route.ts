@@ -13,25 +13,20 @@ const g = globalThis as { webrtcStore?: WebRTCStore };
 if (!g.webrtcStore) g.webrtcStore = {};
 const memoryStore = g.webrtcStore;
 
-/**
- * Wraps a JSON response with CORS headers. (So that this api can be called from Electron apps)
- */
-function withCORS(json: Record<string, string | string[] | number>, status = 200) {
-  return NextResponse.json(json, {
-    status,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  });
-}
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 
 /**
  * Handles CORS preflight requests.
  */
 export async function OPTIONS() {
-  return withCORS({}, 204);
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
 }
 
 /**
@@ -41,15 +36,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const { id } = params;
 
   if (!(id in memoryStore)) {
-    return withCORS({ error: "not found" }, 404);
+    return NextResponse.json({ error: "not found" }, { status: 404, headers: corsHeaders });
   }
 
   if (memoryStore[id].timestamp + 10000 < Date.now()) {
     delete memoryStore[id];
-    return withCORS({ error: "expired" }, 404);
+    return NextResponse.json({ error: "expired" }, { status: 404, headers: corsHeaders });
   }
 
-  return withCORS(memoryStore[id]);
+  return NextResponse.json(memoryStore[id], { status: 200, headers: corsHeaders });
 }
 
 /**
@@ -60,9 +55,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const bodyResult = WebRTCBodySchema.safeParse(await req.json());
   if (!bodyResult.success) {
-    return withCORS({ error: "invalid body" }, 400);
+    return NextResponse.json(
+      { error: "invalid body", details: bodyResult.error.errors },
+      { status: 400, headers: corsHeaders }
+    );
   }
 
   memoryStore[id] = { ...bodyResult.data, timestamp: Date.now() };
-  return withCORS({});
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
