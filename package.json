@@ -21,7 +21,7 @@
     "@prisma/client": "^5.16.1",
     "compressorjs": "^1.2.1",
     "framer-motion": "^11.2.10",
-    "next": "14.2.3",
+    "next": "^14.2.33",
     "next-auth": "^5.0.0-beta.20",
     "next-view-transitions": "^0.3.0",
     "react": "^18",
@@ -31,6 +31,7 @@
     "react-hot-toast": "^2.4.1",
     "react-zoom-pan-pinch": "^3.6.1",
     "recoil": "^0.7.7",
+    "redis": "^5.8.2",
     "server-only": "^0.0.1",
     "sharp": "^0.33.4",
     "zod": "^3.23.8"
