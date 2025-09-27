@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JoinSessionSchema } from "@/schema/sessionSchema";
+import { JoinSessionSchema, GetSessionSchema } from "@/schema/sessionSchema";
 import { sessionService } from "@/utils/session-service";
 
 const corsHeaders = {
@@ -25,8 +25,17 @@ export async function OPTIONS() {
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
+    const body = await req.json();
 
-    const session = await sessionService.pollSession(id, 5000);
+    const parseResult = GetSessionSchema.safeParse(body);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: "Invalid request body", details: parseResult.error.errors },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const session = await sessionService.pollSession(id, parseResult.data.trigger, 5000);
 
     if (!session) {
       return NextResponse.json({ error: "Session not found or timeout" }, { status: 404, headers: corsHeaders });
@@ -51,7 +60,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const body = await req.json();
 
     const parseResult = JoinSessionSchema.safeParse(body);
-
     if (!parseResult.success) {
       return NextResponse.json(
         { error: "Invalid request body", details: parseResult.error.errors },

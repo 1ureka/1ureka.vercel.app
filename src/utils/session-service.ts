@@ -123,7 +123,7 @@ export class SessionService {
     return { ...updatedMetadata, signal: updatedSignal };
   }
 
-  async pollSession(id: string, timeoutMs = 5000): Promise<Session | null> {
+  async pollSession(id: string, trigger: "join" | "offer" | "answer", timeoutMs = 5000): Promise<Session | null> {
     const startTime = Date.now();
     const checkInterval = 500; // 500ms
     let session = await this.getSession(id);
@@ -133,7 +133,15 @@ export class SessionService {
         return null;
       }
 
-      if (session.status !== SessionStatus.WAITING) {
+      if (trigger === "join" && session.status !== SessionStatus.WAITING) {
+        return session;
+      }
+
+      if (trigger === "offer" && session.signal.offer) {
+        return session;
+      }
+
+      if (trigger === "answer" && session.signal.answer) {
         return session;
       }
 

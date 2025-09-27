@@ -24,15 +24,15 @@ export const SignalSchema = z.object({
   candidate: z.array(z.string()),
 });
 
-export const GetSignalSchema = z.object({
-  type: z.enum(["offer", "answer"]),
+export const GetSessionSchema = z.object({
+  trigger: z.enum(["join", "offer", "answer"]),
 });
 
 // Session types
 export type CreateSessionRequest = z.infer<typeof CreateSessionSchema>;
 export type JoinSessionRequest = z.infer<typeof JoinSessionSchema>;
 export type SignalRequest = z.infer<typeof SignalSchema>;
-export type GetSignalRequest = z.infer<typeof GetSignalSchema>;
+export type GetSessionRequest = z.infer<typeof GetSessionSchema>;
 
 export interface SessionMetadata {
   id: string;
