@@ -4,7 +4,7 @@ const g = globalThis as { redis?: RedisClientType };
 
 export async function getRedisClient(): Promise<RedisClientType> {
   if (!g.redis) {
-    g.redis = createClient();
+    g.redis = createClient({ url: process.env.REDIS_URL });
     await g.redis.connect();
   }
 
