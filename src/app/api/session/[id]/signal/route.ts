@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SignalSchema, GetSignalSchema } from "@/schema/sessionSchema";
+import { SignalSchema } from "@/schema/sessionSchema";
 import { sessionService } from "@/utils/session-service";
 
 const corsHeaders = {
@@ -16,44 +16,6 @@ export async function OPTIONS() {
     status: 204,
     headers: corsHeaders,
   });
-}
-
-/**
- * Long polling to check for signals from the other party.
- * Polls for 5 seconds with 200ms intervals.
- */
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params;
-    const { searchParams } = new URL(req.url);
-
-    const queryData = {
-      type: searchParams.get("type"),
-    };
-
-    const parseResult = GetSignalSchema.safeParse(queryData);
-
-    if (!parseResult.success) {
-      return NextResponse.json(
-        { error: "Invalid query parameters", details: parseResult.error.errors },
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    const signal = await sessionService.waitForSignal(id, parseResult.data.type, 5000);
-
-    if (!signal) {
-      return NextResponse.json({ error: "Signal not found or timeout" }, { status: 404, headers: corsHeaders });
-    }
-
-    return NextResponse.json(signal, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  } catch (error) {
-    console.error("Error getting signal:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: corsHeaders });
-  }
 }
 
 /**

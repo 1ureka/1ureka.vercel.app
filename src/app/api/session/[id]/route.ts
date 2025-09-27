@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   try {
     const { id } = params;
 
-    const session = await sessionService.waitForJoin(id, 5000);
+    const session = await sessionService.pollSession(id, 5000);
 
     if (!session) {
       return NextResponse.json({ error: "Session not found or timeout" }, { status: 404, headers: corsHeaders });

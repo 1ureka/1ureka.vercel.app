@@ -27,14 +27,7 @@ export class SessionService {
     const id = nanoid();
     const createdAt = new Date().toISOString();
 
-    const metadata: SessionMetadata = {
-      id,
-      host,
-      client: "",
-      status: SessionStatus.WAITING,
-      createdAt,
-    };
-
+    const metadata: SessionMetadata = { id, host, client: "", status: SessionStatus.WAITING, createdAt };
     const signal: SessionSignal = {};
 
     // Store metadata as hash with individual field-value pairs
@@ -123,25 +116,19 @@ export class SessionService {
     updatedSignal[type] = { sdp, candidate };
 
     // Update status to signaling
-    await redis.hSet(`${SESSION_METADATA_PREFIX}${id}`, {
-      status: SessionStatus.SIGNALING,
-    });
+    await redis.hSet(`${SESSION_METADATA_PREFIX}${id}`, { status: SessionStatus.SIGNALING });
     await redis.set(`${SESSION_SIGNAL_PREFIX}${id}`, JSON.stringify(updatedSignal));
 
-    const updatedMetadata: SessionMetadata = {
-      ...session,
-      status: SessionStatus.SIGNALING,
-    };
-
+    const updatedMetadata: SessionMetadata = { ...session, status: SessionStatus.SIGNALING };
     return { ...updatedMetadata, signal: updatedSignal };
   }
 
-  async waitForJoin(id: string, timeoutMs = 5000): Promise<Session | null> {
+  async pollSession(id: string, timeoutMs = 5000): Promise<Session | null> {
     const startTime = Date.now();
     const checkInterval = 500; // 500ms
+    let session = await this.getSession(id);
 
     while (Date.now() - startTime < timeoutMs) {
-      const session = await this.getSession(id);
       if (!session) {
         return null;
       }
@@ -151,33 +138,10 @@ export class SessionService {
       }
 
       await new Promise((resolve) => setTimeout(resolve, checkInterval));
+      session = await this.getSession(id);
     }
 
-    return null;
-  }
-
-  async waitForSignal(
-    id: string,
-    type: "offer" | "answer",
-    timeoutMs = 5000
-  ): Promise<{ sdp: string; candidate: string[] } | null> {
-    const startTime = Date.now();
-    const checkInterval = 200; // 200ms
-
-    while (Date.now() - startTime < timeoutMs) {
-      const session = await this.getSession(id);
-      if (!session) {
-        return null;
-      }
-
-      if (session.signal[type]) {
-        return session.signal[type]!;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, checkInterval));
-    }
-
-    return null;
+    return session;
   }
 }
 
