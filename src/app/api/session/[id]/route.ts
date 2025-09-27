@@ -25,9 +25,10 @@ export async function OPTIONS() {
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
-    const body = await req.json();
+    const { searchParams } = new URL(req.url);
+    const trigger = searchParams.get("for");
 
-    const parseResult = GetSessionSchema.safeParse(body);
+    const parseResult = GetSessionSchema.safeParse({ trigger });
     if (!parseResult.success) {
       return NextResponse.json(
         { error: "Invalid request body", details: parseResult.error.errors },
