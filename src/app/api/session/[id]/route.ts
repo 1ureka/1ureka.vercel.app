@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JoinSessionSchema, GetSessionSchema } from "@/schema/sessionSchema";
-import { sessionService } from "@/utils/session-service";
+import { sessionSchema } from "@/schema/sessionSchema";
+import { pollSession, joinSession } from "@/utils/session-service";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,26 +26,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   try {
     const { id } = params;
     const { searchParams } = new URL(req.url);
-    const trigger = searchParams.get("for");
 
-    const parseResult = GetSessionSchema.safeParse({ trigger });
+    const parseResult = sessionSchema.GET.safeParse({ event: searchParams.get("for") });
     if (!parseResult.success) {
-      return NextResponse.json(
-        { error: "Invalid request body", details: parseResult.error.errors },
-        { status: 400, headers: corsHeaders }
-      );
+      const error = "Invalid request search parameters";
+      return NextResponse.json({ error, details: parseResult.error.errors }, { status: 400, headers: corsHeaders });
     }
 
-    const session = await sessionService.pollSession(id, parseResult.data.trigger, 5000);
-
+    const session = await pollSession(id, parseResult.data.event, 5000);
     if (!session) {
       return NextResponse.json({ error: "Session not found or timeout" }, { status: 404, headers: corsHeaders });
+    } else {
+      return NextResponse.json(session, { status: 200, headers: corsHeaders });
     }
-
-    return NextResponse.json(session, {
-      status: 200,
-      headers: corsHeaders,
-    });
   } catch (error) {
     console.error("Error getting session:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: corsHeaders });
@@ -60,24 +53,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { id } = params;
     const body = await req.json();
 
-    const parseResult = JoinSessionSchema.safeParse(body);
+    const parseResult = sessionSchema.Id.POST.safeParse(body);
     if (!parseResult.success) {
-      return NextResponse.json(
-        { error: "Invalid request body", details: parseResult.error.errors },
-        { status: 400, headers: corsHeaders }
-      );
+      const error = "Invalid request body";
+      return NextResponse.json({ error, details: parseResult.error.errors }, { status: 400, headers: corsHeaders });
     }
 
-    const session = await sessionService.joinSession(id, parseResult.data.client);
-
+    const session = await joinSession(id, parseResult.data.client);
     if (!session) {
       return NextResponse.json({ error: "Session not found or already joined" }, { status: 404, headers: corsHeaders });
+    } else {
+      return NextResponse.json(session, { status: 200, headers: corsHeaders });
     }
-
-    return NextResponse.json(session, {
-      status: 200,
-      headers: corsHeaders,
-    });
   } catch (error) {
     console.error("Error joining session:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: corsHeaders });

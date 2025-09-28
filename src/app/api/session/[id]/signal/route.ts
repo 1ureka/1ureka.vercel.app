@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SignalSchema } from "@/schema/sessionSchema";
-import { sessionService } from "@/utils/session-service";
+import { sessionSchema } from "@/schema/sessionSchema";
+import { addSignal } from "@/utils/session-service";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,33 +26,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { id } = params;
     const body = await req.json();
 
-    const parseResult = SignalSchema.safeParse(body);
-
+    const parseResult = sessionSchema.Id.Signal.POST.safeParse(body);
     if (!parseResult.success) {
-      return NextResponse.json(
-        { error: "Invalid request body", details: parseResult.error.errors },
-        { status: 400, headers: corsHeaders }
-      );
+      const error = "Invalid request body";
+      return NextResponse.json({ error, details: parseResult.error.errors }, { status: 400, headers: corsHeaders });
     }
 
-    const session = await sessionService.addSignal(
-      id,
-      parseResult.data.type,
-      parseResult.data.sdp,
-      parseResult.data.candidate
-    );
-
+    const session = await addSignal(id, parseResult.data.type, parseResult.data.sdp, parseResult.data.candidate);
     if (!session) {
-      return NextResponse.json(
-        { error: "Session not found or not in joined state" },
-        { status: 404, headers: corsHeaders }
-      );
+      const error = "Session not found or not in joined state";
+      return NextResponse.json({ error }, { status: 404, headers: corsHeaders });
+    } else {
+      return new NextResponse(null, { status: 204, headers: corsHeaders });
     }
-
-    return new NextResponse(null, {
-      status: 204,
-      headers: corsHeaders,
-    });
+    //
   } catch (error) {
     console.error("Error adding signal:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500, headers: corsHeaders });

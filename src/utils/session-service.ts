@@ -1,156 +1,97 @@
 import { nanoid } from "nanoid";
-import { getRedisClient } from "./redis";
-import { Session, SessionMetadata, SessionSignal, SessionStatus } from "../schema/sessionSchema";
-import { RedisClientType } from "redis";
+import { Session, SessionMetadata, SessionSignal } from "../schema/sessionSchema";
+import { createClient } from "redis";
 
 const SESSION_METADATA_PREFIX = "session:meta:";
 const SESSION_SIGNAL_PREFIX = "session:signal:";
 const INITIAL_TTL = 120; // 2 minutes in seconds
 const JOINED_TTL = 45; // 45 seconds in seconds
 
-export class SessionService {
-  private redis: RedisClientType | null;
+const redisPromise = createClient({ url: process.env.REDIS_URL }).connect();
 
-  constructor() {
-    this.redis = null;
-  }
+async function getSession(id: string): Promise<Session | null> {
+  const redis = await redisPromise;
 
-  private async getRedis() {
-    if (!this.redis) {
-      this.redis = await getRedisClient();
-    }
-    return this.redis;
-  }
+  const metadataExists = await redis.exists(`${SESSION_METADATA_PREFIX}${id}`);
+  if (!metadataExists) return null;
 
-  async createSession(host: string): Promise<Session> {
-    const redis = await this.getRedis();
-    const id = nanoid();
-    const createdAt = new Date().toISOString();
+  const metadataRaw = await redis.hGetAll(`${SESSION_METADATA_PREFIX}${id}`);
+  const metadata = metadataRaw as unknown as SessionMetadata;
+  const signalData = await redis.get(`${SESSION_SIGNAL_PREFIX}${id}`);
+  const signal: SessionSignal = signalData ? JSON.parse(signalData) : {};
 
-    const metadata: SessionMetadata = { id, host, client: "", status: SessionStatus.WAITING, createdAt };
-    const signal: SessionSignal = {};
-
-    // Store metadata as hash with individual field-value pairs
-    await redis.hSet(`${SESSION_METADATA_PREFIX}${id}`, {
-      id,
-      host,
-      client: "",
-      status: SessionStatus.WAITING,
-      createdAt,
-    });
-
-    // Store signal as JSON string
-    await redis.set(`${SESSION_SIGNAL_PREFIX}${id}`, JSON.stringify(signal));
-
-    // Set TTL for both keys
-    await redis.expire(`${SESSION_METADATA_PREFIX}${id}`, INITIAL_TTL);
-    await redis.expire(`${SESSION_SIGNAL_PREFIX}${id}`, INITIAL_TTL);
-
-    return { ...metadata, signal };
-  }
-
-  async joinSession(id: string, client: string): Promise<Session | null> {
-    const redis = await this.getRedis();
-
-    // Get current metadata
-    const metadataExists = await redis.exists(`${SESSION_METADATA_PREFIX}${id}`);
-    if (!metadataExists) {
-      return null;
-    }
-
-    const metadataRaw = await redis.hGetAll(`${SESSION_METADATA_PREFIX}${id}`);
-    const metadata = metadataRaw as unknown as SessionMetadata;
-
-    if (metadata.status !== SessionStatus.WAITING) {
-      return null;
-    }
-
-    // Update metadata with individual field updates
-    await redis.hSet(`${SESSION_METADATA_PREFIX}${id}`, {
-      client,
-      status: SessionStatus.JOINED,
-    });
-
-    // Reset TTL to 45 seconds
-    await redis.expire(`${SESSION_METADATA_PREFIX}${id}`, JOINED_TTL);
-    await redis.expire(`${SESSION_SIGNAL_PREFIX}${id}`, JOINED_TTL);
-
-    const signalData = await redis.get(`${SESSION_SIGNAL_PREFIX}${id}`);
-    const signal: SessionSignal = signalData ? JSON.parse(signalData) : {};
-
-    const updatedMetadata: SessionMetadata = {
-      ...metadata,
-      client,
-      status: SessionStatus.JOINED,
-    };
-
-    return { ...updatedMetadata, signal };
-  }
-
-  async getSession(id: string): Promise<Session | null> {
-    const redis = await this.getRedis();
-
-    const metadataExists = await redis.exists(`${SESSION_METADATA_PREFIX}${id}`);
-    if (!metadataExists) {
-      return null;
-    }
-
-    const metadataRaw = await redis.hGetAll(`${SESSION_METADATA_PREFIX}${id}`);
-    const metadata = metadataRaw as unknown as SessionMetadata;
-    const signalData = await redis.get(`${SESSION_SIGNAL_PREFIX}${id}`);
-    const signal: SessionSignal = signalData ? JSON.parse(signalData) : {};
-
-    return { ...metadata, signal };
-  }
-
-  async addSignal(id: string, type: "offer" | "answer", sdp: string, candidate: string[]): Promise<Session | null> {
-    const redis = await this.getRedis();
-
-    const session = await this.getSession(id);
-    if (!session || session.status !== SessionStatus.JOINED) {
-      return null;
-    }
-
-    // Update signal
-    const updatedSignal = { ...session.signal };
-    updatedSignal[type] = { sdp, candidate };
-
-    // Update status to signaling
-    await redis.hSet(`${SESSION_METADATA_PREFIX}${id}`, { status: SessionStatus.SIGNALING });
-    await redis.set(`${SESSION_SIGNAL_PREFIX}${id}`, JSON.stringify(updatedSignal));
-
-    const updatedMetadata: SessionMetadata = { ...session, status: SessionStatus.SIGNALING };
-    return { ...updatedMetadata, signal: updatedSignal };
-  }
-
-  async pollSession(id: string, trigger: "join" | "offer" | "answer", timeoutMs = 5000): Promise<Session | null> {
-    const startTime = Date.now();
-    const checkInterval = 500; // 500ms
-    let session = await this.getSession(id);
-
-    while (Date.now() - startTime < timeoutMs) {
-      if (!session) {
-        return null;
-      }
-
-      if (trigger === "join" && session.status !== SessionStatus.WAITING) {
-        return session;
-      }
-
-      if (trigger === "offer" && session.signal.offer) {
-        return session;
-      }
-
-      if (trigger === "answer" && session.signal.answer) {
-        return session;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, checkInterval));
-      session = await this.getSession(id);
-    }
-
-    return session;
-  }
+  return { ...metadata, signal };
 }
 
-export const sessionService = new SessionService();
+async function createSession(host: string): Promise<Session> {
+  const redis = await redisPromise;
+  const id = nanoid();
+  const createdAt = new Date().toISOString();
+
+  const metadata: SessionMetadata = { id, host, client: "", status: "waiting", createdAt };
+  const signal: SessionSignal = {};
+
+  // Store metadata as hash with individual field-value pairs
+  await redis.hSet(`${SESSION_METADATA_PREFIX}${id}`, { ...metadata });
+  await redis.expire(`${SESSION_METADATA_PREFIX}${id}`, INITIAL_TTL);
+  // Store signal as JSON string
+  await redis.set(`${SESSION_SIGNAL_PREFIX}${id}`, JSON.stringify(signal));
+  await redis.expire(`${SESSION_SIGNAL_PREFIX}${id}`, INITIAL_TTL);
+
+  return { ...metadata, signal };
+}
+
+async function joinSession(id: string, client: string): Promise<Session | null> {
+  const redis = await redisPromise;
+
+  const session = await getSession(id);
+  if (!session || session.status !== "waiting") return null;
+
+  // Update metadata with individual field updates
+  await redis.hSet(`${SESSION_METADATA_PREFIX}${id}`, { client, status: "joined" });
+  // Reset TTL to 45 seconds
+  await redis.expire(`${SESSION_METADATA_PREFIX}${id}`, JOINED_TTL);
+  await redis.expire(`${SESSION_SIGNAL_PREFIX}${id}`, JOINED_TTL);
+
+  return { ...session, client, status: "joined" };
+}
+
+type AddSignal = (id: string, type: "offer" | "answer", sdp: string, candidate: string[]) => Promise<Session | null>;
+const addSignal: AddSignal = async (id, type, sdp, candidate) => {
+  const redis = await redisPromise;
+
+  const session = await getSession(id);
+  if (!session || session.status !== "joined") return null;
+
+  // Update signal
+  const updatedSignal = { ...session.signal };
+  updatedSignal[type] = { sdp, candidate };
+
+  // Update status to signaling
+  await redis.hSet(`${SESSION_METADATA_PREFIX}${id}`, { status: "signaling" });
+  await redis.set(`${SESSION_SIGNAL_PREFIX}${id}`, JSON.stringify(updatedSignal));
+
+  return { ...session, status: "signaling", signal: updatedSignal };
+};
+
+type PollSession = (id: string, event: "join" | "offer" | "answer", timeoutMs?: number) => Promise<Session | null>;
+const pollSession: PollSession = async (id, event, timeoutMs = 5000) => {
+  const startTime = Date.now();
+  const checkInterval = 500; // 500ms
+  let session = await getSession(id);
+
+  while (Date.now() - startTime < timeoutMs) {
+    if (!session) return null;
+
+    if (event === "join" && session.status !== "waiting") return session;
+    if (event === "offer" && session.signal.offer) return session;
+    if (event === "answer" && session.signal.answer) return session;
+
+    await new Promise((resolve) => setTimeout(resolve, checkInterval));
+    session = await getSession(id);
+  }
+
+  return session;
+};
+
+export { createSession, joinSession, addSignal, pollSession };
