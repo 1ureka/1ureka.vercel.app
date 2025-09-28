@@ -61,7 +61,7 @@ const addSignal: AddSignal = async (id, type, sdp, candidate) => {
   const redis = await redisPromise;
 
   const session = await getSession(id);
-  if (!session || session.status !== "joined") return null;
+  if (!session) return null;
 
   // Update signal
   const updatedSignal = { ...session.signal };
