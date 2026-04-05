@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://1ureka.github.io/$1",
+      "permanent": true
+    }
+  ]
+}
